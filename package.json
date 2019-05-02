@@ -29,6 +29,7 @@
 		"test": "yarn run compile && node ./node_modules/vscode/bin/test"
 	},
 	"devDependencies": {
+		"@types/color": "^3.0.0",
 		"@types/css": "^0.0.31",
 		"@types/mocha": "^2.2.42",
 		"@types/node": "^10.12.21",
@@ -36,5 +37,8 @@
 		"tslint": "^5.12.1",
 		"typescript": "^3.3.1",
 		"vscode": "^1.1.28"
+	},
+	"dependencies": {
+		"color": "^3.1.1"
 	}
 }
