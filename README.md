@@ -20,7 +20,9 @@ Recess Styles CSS IntelliSense provides suggestions of recess-style classes as y
 ---
 
 __Classname suggestion__
+
 ![](./intellisenseExample.gif)
 
 __CSS Preview__
+
 ![](./hoverExample.gif)
