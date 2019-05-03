@@ -1,25 +1,20 @@
 {
 	"name": "vscode-recessstyles",
-	"displayName": "vscode-recessStyles",
-	"description": "Recess Styles IntelliSense",
+	"displayName": "Recess Styles CSS intellisense",
+	"description": "Recess Styles CSS class name completion",
+	"publisher": "jmenestr",
 	"version": "0.0.1",
 	"engines": {
 		"vscode": "^1.33.0"
 	},
 	"categories": [
-		"Other"
+		"Intellisense"
 	],
 	"activationEvents": [
-		"onCommand:extension.helloWorld"
+		"onLanguage:typescriptreact"
 	],
 	"main": "./out/extension.js",
 	"contributes": {
-		"commands": [
-			{
-				"command": "extension.helloWorld",
-				"title": "Hello World"
-			}
-		]
 	},
 	"scripts": {
 		"vscode:prepublish": "yarn run compile",

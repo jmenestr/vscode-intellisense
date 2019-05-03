@@ -1,16 +1,27 @@
 "use strict";
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : new P(function (resolve) { resolve(result.value); }).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 const vscode = require("vscode");
 const color = require("color");
-const classNames_1 = require("./classNames");
-const JS_TYPES = ['typescriptreact', 'javascript', 'javascriptreact'];
+const fs = require("fs");
+const utils = require("util");
+const processCss_1 = require("./processCss");
+const readFile = utils.promisify(fs.readFile);
+const JS_TYPES = ['typescriptreact', 'javascriptreact'];
+const RecessStylesGlob = '**/recess-styles.css';
 const isColor = (cssColor) => cssColor.startsWith('#');
 function createCompletionItemProvider(items) {
     return vscode.languages.registerCompletionItemProvider(JS_TYPES, {
         provideCompletionItems(document, position) {
-            console.log(document);
             const range = new vscode.Range(new vscode.Position(0, 0), position);
             const text = document.getText(range);
             const lines = text.split(/[\n\r]/);
@@ -25,7 +36,6 @@ function createCompletionItemProvider(items) {
                 const item = new vscode.CompletionItem(className, vscode.CompletionItemKind.Constant);
                 const { property, value } = items[className];
                 if (isColor(value)) {
-                    console.log(color(value));
                     item.kind = vscode.CompletionItemKind.Color;
                     item.documentation = color(value).rgb().string();
                 }
@@ -35,19 +45,35 @@ function createCompletionItemProvider(items) {
         }
     }, ..."'", '"', ' ');
 }
+function getRecessStylesSource() {
+    return __awaiter(this, void 0, void 0, function* () {
+        const files = yield vscode.workspace.findFiles(RecessStylesGlob);
+        if (files.length === 0) {
+            return null;
+        }
+        const source = yield readFile(files[0].path, 'utf8');
+        return source;
+    });
+}
 // const createCompletionList = (classNames: )
 class RecessStylesIntelliSense {
-    constructor(classes) {
+    constructor(cssSource) {
         this._providers = [];
-        this.classes = classes;
+        if (cssSource) {
+            this.reload(cssSource);
+        }
+    }
+    reload(cssSource) {
+        this.dispose();
+        this.classes = processCss_1.processCss(cssSource);
         this._providers.push(createCompletionItemProvider(this.classes));
         this._providers.push(vscode.languages.registerHoverProvider([...JS_TYPES], {
             provideHover: (document, position, token) => {
-                console.log(position);
                 const range1 = new vscode.Range(new vscode.Position(Math.max(position.line - 5, 0), 0), position);
                 const text1 = document.getText(range1);
-                if (!/\bclass(Name)?=['"][^'"]*$/.test(text1))
+                if (!/\bclass(Name)?=['"][^'"]*$/.test(text1)) {
                     return;
+                }
                 const range2 = new vscode.Range(new vscode.Position(Math.max(position.line - 5, 0), 0), position.with({ line: position.line + 1 }));
                 const text2 = document.getText(range2);
                 let str = text1 + text2.substr(text1.length).match(/^([^"' ]*)/)[0];
@@ -72,7 +98,6 @@ class RecessStylesIntelliSense {
                     let code = `${selector} {\n  ${css.property}: ${css.value};\n}`;
                     if (css.mediaParent) {
                         code = `@media screen ${css.mediaParent} {\n ${code.replace(/^/gm, '  ')} \n }`;
-                        console.log(css.mediaParent);
                     }
                     const hoverStr = new vscode.MarkdownString();
                     hoverStr.appendCodeblock(code, 'css');
@@ -93,24 +118,54 @@ class RecessStylesIntelliSense {
         }
     }
 }
-// this method is called when your extension is activated
-// your extension is activated the very first time the command is executed
-function activate(context) {
-    // Use the console to output diagnostic information (console.log) and errors (console.error)
-    // This line of code will only be executed once when your extension is activated
-    console.log('Congratulations, your extension "vscode-recessstyles" is now active!');
-    const intelliSense = new RecessStylesIntelliSense(classNames_1.classNames);
-    context.subscriptions.push(intelliSense);
-    console.log(intelliSense.classes);
-    // The command has been defined in the package.json file
-    // Now provide the implementation of the command with registerCommand
-    // The commandId parameter must match the command field in package.json
-    let disposable = vscode.commands.registerCommand('extension.helloWorld', () => {
-        // The code you place here will be executed every time your command is executed
-        // Display a message box to the user
-        vscode.window.showInformationMessage('Hello World!');
+function getRecessVersion() {
+    return __awaiter(this, void 0, void 0, function* () {
+        const files = yield vscode.workspace.findFiles('**/package.json', '**/node_modules/**', 1);
+        if (files.length === 0) {
+            return null;
+        }
+        const packageJsonSrc = yield readFile(files[0].path, 'utf8');
+        const packageJson = JSON.parse(packageJsonSrc);
+        return packageJson.dependencies['@guildeducationinc/recess'];
     });
-    context.subscriptions.push(disposable);
+}
+function activate(context) {
+    return __awaiter(this, void 0, void 0, function* () {
+        let recessStylesSource = yield getRecessStylesSource();
+        let currentRecessVersion = yield getRecessVersion();
+        const intelliSense = new RecessStylesIntelliSense(recessStylesSource);
+        context.subscriptions.push(intelliSense);
+        const watcher = vscode.workspace.createFileSystemWatcher('**/package.json');
+        const { onDidChange, onDidCreate, onDidDelete } = watcher;
+        onDidChange(onFileChange);
+        onDidCreate(onFileChange);
+        onDidDelete(onDelete);
+        function onFileChange(e) {
+            return __awaiter(this, void 0, void 0, function* () {
+                const newRecessVersion = yield getRecessVersion();
+                if (newRecessVersion !== currentRecessVersion) {
+                    try {
+                        recessStylesSource = yield getRecessStylesSource();
+                    }
+                    catch (e) {
+                        intelliSense.dispose();
+                        return;
+                    }
+                    if (!recessStylesSource) {
+                        intelliSense.dispose();
+                        return;
+                    }
+                    intelliSense.reload(recessStylesSource);
+                    recessStylesSource = newRecessVersion;
+                }
+            });
+        }
+        function onDelete() {
+            return __awaiter(this, void 0, void 0, function* () {
+                intelliSense.dispose();
+            });
+        }
+    });
 }
 exports.activate = activate;
 // this method is called when your extension is deactivated
